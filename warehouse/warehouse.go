@@ -48,7 +48,7 @@ func (w Warehouse) Transaction() (*Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.bucket, err = t.tx.CreateBucket([]byte("data"))
+	t.bucket, err = t.tx.CreateBucketIfNotExists([]byte("data"))
 	if err != nil {
 		return nil, err
 	}
