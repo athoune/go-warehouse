@@ -1,27 +1,28 @@
 package warehouse
 
 import (
-	"encoding/base64"
+	"bytes"
 	"encoding/binary"
+	"io"
 	"os"
 	"path"
-	"time"
 
-	seekable "github.com/SaveTheRbtz/zstd-seekable-format-go/pkg"
-	"github.com/klauspost/compress/zstd"
 	bolt "go.etcd.io/bbolt"
 )
 
+const BUCKET = "data"
+
 type Warehouse struct {
-	db   *bolt.DB
-	name string
+	db     *bolt.DB
+	name   string
+	bucket *bolt.Bucket
+	tx     *bolt.Tx
 }
-type Transaction struct {
-	tx         *bolt.Tx
-	bucket     *bolt.Bucket
-	zstdWriter seekable.ConcurrentWriter
-	id         string
-	poz        int64
+
+type Join struct {
+	Start   int64
+	Size    int64
+	Archive int64
 }
 
 func New(name string) (*Warehouse, error) {
@@ -38,59 +39,80 @@ func New(name string) (*Warehouse, error) {
 		return nil, err
 	}
 
+	w.tx, err = w.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	w.bucket = w.tx.Bucket([]byte(BUCKET))
+
 	return w, nil
 }
 
-func (w Warehouse) Transaction() (*Transaction, error) {
-	var err error
-	t := &Transaction{}
-	t.tx, err = w.db.Begin(true)
+func (w *Warehouse) Read(key []byte, writer io.Writer) (int64, error) {
+	raw := w.bucket.Get(key)
+	join := &Join{}
+	err := binary.Read(bytes.NewBuffer(raw), binary.LittleEndian, join)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	t.bucket, err = t.tx.CreateBucketIfNotExists([]byte("data"))
+	tablet, err := newTablet(w.name, join.Archive)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	now := time.Now()
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(now.UnixMilli()))
-	dataName := base64.StdEncoding.EncodeToString(b)
-	zstdFile, err := os.OpenFile(path.Join(w.name, dataName), os.O_CREATE|os.O_WRONLY, 0640)
+	_, err = tablet.zstdReader.Seek(join.Start, io.SeekStart)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
-	defer enc.Close()
-	t.zstdWriter, err = seekable.NewWriter(zstdFile, enc)
-	if err != nil {
-		return nil, err
-	}
-
-	return t, nil
+	return io.CopyN(writer, tablet.zstdReader, join.Size)
 }
 
-func (t *Transaction) Commit() error {
-	err := t.zstdWriter.Close()
-	if err != nil {
-		return err
+/*
+	func (w *Warehouse) transactionReader() (*TransactionReader, error) {
+		var err error
+		t := &TransactionReader{}
+		t.tx, err = w.db.Begin(false)
+		if err != nil {
+			return nil, err
+		}
+		t.bucket = t.tx.Bucket([]byte(BUCKET))
+		if t.bucket == nil {
+			return nil, errors.New("unknown bucket name")
+		}
+
+		dec, err := zstd.NewReader(nil)
+		if err != nil {
+			return nil, err
+		}
+		t.zstdReader, err = seekable.NewReader(t.zstdFile, dec)
+		return t, nil
 	}
-	return t.tx.Commit()
+*/
+
+func (w *Warehouse) Close() error {
+	return w.db.Close()
 }
 
-func (t *Transaction) Append(key []byte, value []byte) error {
-	i, err := t.zstdWriter.Write(value)
-	if err != nil {
-		return err
+/*
+func (t *Warehouse) _Get(key []byte) ([]byte, error) {
+	raw := t.bucket.Get(key)
+	if len(raw) == 0 {
+		return nil, nil
 	}
-	b := make([]byte, 16)
-	binary.LittleEndian.PutUint64(b, uint64(t.poz))
-	binary.LittleEndian.PutUint64(b[8:], uint64(len(value)))
-	t.bucket.Put(key, b)
-
-	t.poz += int64(i)
-
-	return nil
+	join := &Join{}
+	err := binary.Read(bytes.NewBuffer(raw), binary.LittleEndian, join)
+	if err != nil {
+		return nil, err
+	}
+	_, err = t.zstdReader.Seek(join.Start, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	buff := make([]byte, join.End-join.Start)
+	_, err = t.zstdReader.Read(buff)
+	if err != nil {
+		return nil, err
+	}
+	return buff, nil
 }
+*/
