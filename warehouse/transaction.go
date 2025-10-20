@@ -15,7 +15,7 @@ import (
 const READ_BUFFER_SIZE = 100 * 1000
 
 type Transaction struct {
-	tx          *bolt.Tx
+	Tx          *bolt.Tx
 	bucket      *bolt.Bucket
 	name        string
 	decoder     *zstd.Decoder
@@ -31,14 +31,14 @@ func (w *Warehouse) Transaction() (*Transaction, error) {
 		decoder: w.decoder,
 		encoder: w.encoder,
 	}
-	t.tx, err = w.db.Begin(w.encoder != nil)
+	t.Tx, err = w.db.Begin(w.encoder != nil)
 	if err != nil {
 		return nil, err
 	}
 	if w.encoder == nil {
-		t.bucket = t.tx.Bucket([]byte(BUCKET))
+		t.bucket = t.Tx.Bucket([]byte(BUCKET))
 	} else {
-		t.bucket, err = t.tx.CreateBucketIfNotExists([]byte(BUCKET))
+		t.bucket, err = t.Tx.CreateBucketIfNotExists([]byte(BUCKET))
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +48,7 @@ func (w *Warehouse) Transaction() (*Transaction, error) {
 }
 
 func (t *Transaction) Close() error {
-	err := t.tx.Commit()
+	err := t.Tx.Commit()
 	if err != nil {
 		return err
 	}
