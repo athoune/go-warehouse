@@ -16,7 +16,7 @@ const READ_BUFFER_SIZE = 100 * 1000
 
 type Transaction struct {
 	Tx          *bolt.Tx
-	bucket      *bolt.Bucket
+	Bucket      *bolt.Bucket
 	name        string
 	decoder     *zstd.Decoder
 	encoder     *zstd.Encoder
@@ -36,9 +36,9 @@ func (w *Warehouse) Transaction() (*Transaction, error) {
 		return nil, err
 	}
 	if w.encoder == nil {
-		t.bucket = t.Tx.Bucket([]byte(BUCKET))
+		t.Bucket = t.Tx.Bucket([]byte(BUCKET))
 	} else {
-		t.bucket, err = t.Tx.CreateBucketIfNotExists([]byte(BUCKET))
+		t.Bucket, err = t.Tx.CreateBucketIfNotExists([]byte(BUCKET))
 		if err != nil {
 			return nil, err
 		}
@@ -87,18 +87,18 @@ func (t *Transaction) Put(key []byte, value []byte) error {
 		return err
 	}
 	t.writeTablet.poz += i
-	return t.bucket.Put(key, buf.Bytes())
+	return t.Bucket.Put(key, buf.Bytes())
 }
 
 func (t *Transaction) Dump(w io.Writer) error {
-	return t.bucket.ForEach(func(k []byte, v []byte) error {
+	return t.Bucket.ForEach(func(k []byte, v []byte) error {
 		fmt.Fprintf(w, "%v => %v#%v\n", string(k), v, len(v))
 		return nil
 	})
 }
 
 func (t *Transaction) Read(key []byte, writer io.Writer) (int64, error) {
-	raw := t.bucket.Get(key)
+	raw := t.Bucket.Get(key)
 	if raw == nil {
 		return 0, fmt.Errorf("unknown key : %s", string(key))
 	}
