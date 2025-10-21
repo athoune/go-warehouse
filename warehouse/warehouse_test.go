@@ -35,7 +35,7 @@ func TestWarehouse(t *testing.T) {
 		{[]byte("banana"), []byte("split")},
 	}
 	for _, fixture := range fixtures {
-		err = tx.Set(fixture.k, fixture.v)
+		err = tx.Put(fixture.k, fixture.v)
 		assert.NoError(t, err)
 	}
 	assert.NoError(t, err)

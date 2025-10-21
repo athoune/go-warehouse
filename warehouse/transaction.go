@@ -61,7 +61,7 @@ func (t *Transaction) Close() error {
 	return nil
 }
 
-func (t *Transaction) Set(key []byte, value []byte) error {
+func (t *Transaction) Put(key []byte, value []byte) error {
 	if t.readonly {
 		return errors.New("read only transaction")
 	}
