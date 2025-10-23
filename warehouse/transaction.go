@@ -61,6 +61,10 @@ func (t *Transaction) Close() error {
 	return nil
 }
 
+func (t *Transaction) Get(key []byte) []byte {
+	panic("warehouse.Transaction.Get is not implemented, yet") // FIXME
+}
+
 func (t *Transaction) Put(key []byte, value []byte) error {
 	if t.readonly {
 		return errors.New("read only transaction")
