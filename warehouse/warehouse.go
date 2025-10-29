@@ -22,6 +22,7 @@ type Join struct {
 	Start   int64
 	Size    int64
 	Archive int64
+	Whence  int64
 }
 
 func New(name string) (*Warehouse, error) {

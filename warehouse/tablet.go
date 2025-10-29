@@ -1,6 +1,7 @@
 package warehouse
 
 import (
+	"io"
 	"os"
 	"path"
 
@@ -14,8 +15,8 @@ zstd archive, for storing a collection of blobs.
 type tablet struct {
 	zstdFile *os.File
 	decoder  *zstd.Decoder
-	reader   seekable.Reader
-	Writer   seekable.ConcurrentWriter
+	reader   io.ReadSeekCloser //seekable.Reader
+	Writer   io.WriteCloser    //seekable.ConcurrentWriter
 	poz      int
 	DataId   int64
 	readonly bool
@@ -50,7 +51,7 @@ func (t *Transaction) pickTablet(dataId int64) (*tablet, error) {
 	return tab, nil
 }
 
-func (t *tablet) Reader() (seekable.Reader, error) {
+func (t *tablet) Reader() (io.ReadSeekCloser, error) {
 	var err error
 	if t.reader == nil {
 		t.reader, err = seekable.NewReader(t.zstdFile, t.decoder)
@@ -77,4 +78,9 @@ func (t *tablet) Close() error {
 	}
 
 	return t.zstdFile.Close()
+}
+
+func (t *tablet) Put(key, value []byte) (frame int64, whence int64, err error) {
+
+	return 0, 0, nil
 }
