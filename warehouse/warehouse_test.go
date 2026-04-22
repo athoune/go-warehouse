@@ -101,6 +101,145 @@ func TestSeekThenReadTo(t *testing.T) {
 	assert.Equal(t, []byte{2, 3, 4, 5}, w.Bytes())
 }
 
+// TestSeekThenReadToInvalidOffset tests error handling for invalid offsets.
+func TestSeekThenReadToInvalidOffset(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "seek-read-invalid")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	testFile := path.Join(dirName, "test")
+	err = os.WriteFile(testFile, []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0640)
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		offset    int64
+		size      int64
+		chunkSize int64
+		wantErr   bool
+	}{
+		{
+			name:      "negative offset",
+			offset:    -1,
+			size:      5,
+			chunkSize: 3,
+			wantErr:   true,
+		},
+		{
+			name:      "offset beyond file",
+			offset:    100,
+			size:      5,
+			chunkSize: 3,
+			wantErr:   true, // Seek succeeds but ReadFull fails with EOF
+		},
+		{
+			name:      "size extends beyond file",
+			offset:    5,
+			size:      100,
+			chunkSize: 10,
+			wantErr:   true, // ReadFull fails with EOF
+		},
+		{
+			name:      "offset at end of file",
+			offset:    10,
+			size:      1,
+			chunkSize: 1,
+			wantErr:   true, // EOF - nothing to read
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := os.Open(testFile)
+			assert.NoError(t, err)
+			defer r.Close()
+
+			w := bytes.NewBuffer(nil)
+			n, err := SeekThenReadTo(w, r, tt.offset, tt.size, tt.chunkSize)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, int64(0), n)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.size, n)
+			}
+		})
+	}
+}
+
+// TestSeekThenReadToChunkSizes tests various chunk sizes including edge cases.
+func TestSeekThenReadToChunkSizes(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "seek-read-chunks")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	// Create file with 100 bytes
+	data := bytes.Repeat([]byte("abcdefghij"), 10)
+	testFile := path.Join(dirName, "test")
+	err = os.WriteFile(testFile, data, 0640)
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		offset    int64
+		size      int64
+		chunkSize int64
+		wantData  []byte
+	}{
+		{
+			name:      "chunkSize larger than size",
+			offset:    0,
+			size:      10,
+			chunkSize: 100,
+			wantData:  data[:10],
+		},
+		{
+			name:      "chunkSize equals size",
+			offset:    10,
+			size:      50,
+			chunkSize: 50,
+			wantData:  data[10:60],
+		},
+		{
+			name:      "small chunkSize - many iterations",
+			offset:    0,
+			size:      20,
+			chunkSize: 3,
+			wantData:  data[:20],
+		},
+		{
+			name:      "chunkSize of 1",
+			offset:    5,
+			size:      5,
+			chunkSize: 1,
+			wantData:  data[5:10],
+		},
+		{
+			name:      "read from middle",
+			offset:    50,
+			size:      25,
+			chunkSize: 10,
+			wantData:  data[50:75],
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := os.Open(testFile)
+			assert.NoError(t, err)
+			defer r.Close()
+
+			w := bytes.NewBuffer(nil)
+			n, err := SeekThenReadTo(w, r, tt.offset, tt.size, tt.chunkSize)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.size, n)
+			assert.Equal(t, tt.wantData, w.Bytes())
+		})
+	}
+}
+
 // TestZstd validates the seekable zstd compression library integration.
 // It tests writing compressed data, seeking within it, and reading partial content.
 func TestZstd(t *testing.T) {
