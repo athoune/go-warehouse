@@ -17,8 +17,8 @@ type tablet struct {
 	decoder  *zstd.Decoder     // zstd decoder for reading
 	reader   io.ReadSeekCloser // Lazy-initialized seekable reader for decompression
 	Writer   io.WriteCloser    // Concurrent writer for compression (nil in read-only mode)
-	poz      int               // Current write position within the tablet
-	DataId   int64             // Tablet identifier (typically a timestamp)
+	position int               // Current write position within the tablet
+	ID       int64             // Tablet identifier (typically a timestamp)
 	readonly bool              // Whether this tablet is opened in read-only mode
 }
 
@@ -26,12 +26,12 @@ type tablet struct {
 // In read-only mode, it opens an existing tablet for reading.
 // In read-write mode, it creates the tablet if it doesn't exist and opens it for writing.
 // Returns the tablet or an error if the file cannot be opened.
-func (t *Transaction) pickTablet(dataId int64) (*tablet, error) {
+func (t *Transaction) pickTablet(tabletID int64) (*tablet, error) {
 	var err error
 	tab := &tablet{
 		decoder:  t.decoder,
 		readonly: t.readonly,
-		DataId:   dataId,
+		ID:       tabletID,
 	}
 	// Determine file open flags based on mode
 	var flag int
@@ -42,7 +42,7 @@ func (t *Transaction) pickTablet(dataId int64) (*tablet, error) {
 	}
 	// Open the tablet file
 	tab.zstdFile, err = os.OpenFile(
-		path.Join(t.name, dataName(dataId)),
+		path.Join(t.name, dataName(tabletID)),
 		flag, 0640)
 	if err != nil {
 		return nil, err

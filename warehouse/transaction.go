@@ -12,21 +12,21 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// READ_BUFFER_SIZE defines the buffer size used when reading data from tablets.
+// readBufferSize defines the buffer size used when reading data from tablets.
 // Larger values may improve performance for large reads but consume more memory.
-const READ_BUFFER_SIZE = 100 * 1000
+const readBufferSize = 100 * 1000
 
 // Transaction represents an atomic unit of work within a Warehouse.
 // It provides methods to read, write, and enumerate data.
 // Transactions must be closed using Close() to commit changes or release resources.
 type Transaction struct {
-	Tx          *bolt.Tx       // Underlying BoltDB transaction
-	Bucket      *bolt.Bucket   // The bucket used for storing index entries
-	name        string         // Directory path (inherited from Warehouse)
-	decoder     *zstd.Decoder  // Shared zstd decoder (inherited from Warehouse)
-	encoder     *zstd.Encoder  // Shared zstd encoder (inherited from Warehouse, nil if read-only)
-	writeTablet *tablet        // Current tablet being written to (nil in read-only mode)
-	readonly    bool           // Whether this transaction is read-only
+	Tx          *bolt.Tx      // Underlying BoltDB transaction
+	Bucket      *bolt.Bucket  // The bucket used for storing index entries
+	name        string        // Directory path (inherited from Warehouse)
+	decoder     *zstd.Decoder // Shared zstd decoder (inherited from Warehouse)
+	encoder     *zstd.Encoder // Shared zstd encoder (inherited from Warehouse, nil if read-only)
+	writeTablet *tablet       // Current tablet being written to (nil in read-only mode)
+	readonly    bool          // Whether this transaction is read-only
 }
 
 // Transaction creates a new transaction for this warehouse.
@@ -46,10 +46,10 @@ func (w *Warehouse) Transaction() (*Transaction, error) {
 	}
 	if w.encoder == nil {
 		// Read-only mode: access existing bucket
-		t.Bucket = t.Tx.Bucket([]byte(BUCKET))
+		t.Bucket = t.Tx.Bucket([]byte(bucket))
 	} else {
 		// Read-write mode: create bucket if needed
-		t.Bucket, err = t.Tx.CreateBucketIfNotExists([]byte(BUCKET))
+		t.Bucket, err = t.Tx.CreateBucketIfNotExists([]byte(bucket))
 		if err != nil {
 			return nil, err
 		}
@@ -103,10 +103,10 @@ func (t *Transaction) Put(key []byte, value []byte) error {
 		return err
 	}
 	// Create location record (Join) for this data
-	join := &Join{
-		Start:   int64(t.writeTablet.poz),
-		Size:    int64(i),
-		Archive: t.writeTablet.DataId,
+	join := &Location{
+		Start:    int64(t.writeTablet.position),
+		Size:     int64(i),
+		TabletID: t.writeTablet.ID,
 	}
 	// Serialize the Join structure to binary
 	buf := bytes.NewBuffer(nil)
@@ -114,7 +114,7 @@ func (t *Transaction) Put(key []byte, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.writeTablet.poz += i
+	t.writeTablet.position += i
 	// Store the location in the index
 	return t.Bucket.Put(key, buf.Bytes())
 }
@@ -138,13 +138,13 @@ func (t *Transaction) Read(key []byte, writer io.Writer) (int64, error) {
 		return 0, fmt.Errorf("unknown key : %s", string(key))
 	}
 	// Deserialize the location (Join) from the index
-	join := &Join{}
+	join := &Location{}
 	err := binary.Read(bytes.NewBuffer(raw), binary.LittleEndian, join)
 	if err != nil {
 		return 0, err
 	}
 	// Open the tablet containing this data
-	tablet, err := t.pickTablet(join.Archive)
+	tablet, err := t.pickTablet(join.TabletID)
 	if err != nil {
 		return 0, err
 	}
@@ -154,7 +154,7 @@ func (t *Transaction) Read(key []byte, writer io.Writer) (int64, error) {
 		return 0, err
 	}
 	// Read the data at the specified location
-	return SeekThenReadTo(writer, archiveReader, join.Start, join.Size, READ_BUFFER_SIZE)
+	return SeekThenReadTo(writer, archiveReader, join.Start, join.Size, readBufferSize)
 }
 
 // min returns the smaller of two comparable numeric values.

@@ -11,26 +11,26 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-const BUCKET = "data"
+const bucket = "data"
 
 // Warehouse manages a collection of data stored in zstd-compressed files (tablets)
 // with a BoltDB index for fast lookups.
 // It provides transactional operations for reading and writing data.
 type Warehouse struct {
-	db       *bolt.DB   // BoltDB database for indexing
-	name     string     // Directory path where data is stored
-	decoder  *zstd.Decoder  // Shared zstd decoder for decompression
-	encoder  *zstd.Encoder  // zstd encoder for compression (nil in read-only mode)
-	readonly bool       // Whether this warehouse is in read-only mode
+	db       *bolt.DB      // BoltDB database for indexing
+	name     string        // Directory path where data is stored
+	decoder  *zstd.Decoder // Shared zstd decoder for decompression
+	encoder  *zstd.Encoder // zstd encoder for compression (nil in read-only mode)
+	readonly bool          // Whether this warehouse is in read-only mode
 }
 
-// Join represents the location of a data blob within a tablet file.
+// Location represents the location of a data blob within a tablet file.
 // It stores the offset, size, and tablet identifier needed to retrieve the data.
-type Join struct {
-	Start   int64  // Byte offset within the tablet file
-	Size    int64  // Size of the data blob in bytes
-	Archive int64  // Tablet identifier (timestamp-based)
-	Whence  int64  // Future use (e.g., versioning or flags)
+type Location struct {
+	Start    int64 // Byte offset within the tablet file
+	Size     int64 // Size of the data blob in bytes
+	TabletID int64 // Tablet identifier (timestamp-based)
+	Whence   int64 // Future use (e.g., versioning or flags)
 }
 
 // New creates a new Warehouse instance in read-write mode at the specified directory.
