@@ -1,6 +1,6 @@
 module github.com/athoune/go-warehouse
 
-go 1.23
+go 1.24.4
 
 require (
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.8.0
