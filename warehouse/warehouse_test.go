@@ -186,6 +186,118 @@ func TestBbolt(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestTabletCloseReadOnly verifies that tablet.Close() works correctly
+// in read-only mode without initializing the reader (lazy initialization).
+func TestTabletCloseReadOnly(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-tablet-close-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	// Create warehouse and write some data
+	w, err := New(dirName)
+	assert.NoError(t, err)
+	tx, err := w.Transaction()
+	assert.NoError(t, err)
+
+	err = tx.Put([]byte("key1"), []byte("value1"))
+	assert.NoError(t, err)
+	err = tx.Close()
+	assert.NoError(t, err)
+	err = w.Close()
+	assert.NoError(t, err)
+
+	// Open in read-only mode and close transaction WITHOUT reading
+	// This tests tablet.Close() with reader=nil in read-only mode
+	wr, err := OpenReadOnly(dirName)
+	assert.NoError(t, err)
+	txr, err := wr.Transaction()
+	assert.NoError(t, err)
+
+	// Don't read anything - just close (tests reader=nil branch)
+	err = txr.Close()
+	assert.NoError(t, err)
+	err = wr.Close()
+	assert.NoError(t, err)
+}
+
+// TestTabletCloseWithReader verifies that tablet.Close() properly closes
+// the reader when it has been initialized (lazy reader branch).
+func TestTabletCloseWithReader(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-tablet-reader-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	// Create warehouse with data
+	w, err := New(dirName)
+	assert.NoError(t, err)
+	tx, err := w.Transaction()
+	assert.NoError(t, err)
+
+	err = tx.Put([]byte("key1"), []byte("value1"))
+	assert.NoError(t, err)
+	err = tx.Close()
+	assert.NoError(t, err)
+	err = w.Close()
+	assert.NoError(t, err)
+
+	// Open read-only and read data (initializes reader), then close
+	wr, err := OpenReadOnly(dirName)
+	assert.NoError(t, err)
+	txr, err := wr.Transaction()
+	assert.NoError(t, err)
+
+	// This initializes the reader via lazy loading
+	buff := &bytes.Buffer{}
+	_, err = txr.Read([]byte("key1"), buff)
+	assert.NoError(t, err)
+
+	// Close with reader initialized (tests reader != nil branch)
+	err = txr.Close()
+	assert.NoError(t, err)
+	err = wr.Close()
+	assert.NoError(t, err)
+}
+
+// TestTabletCloseMultipleTablets tests closing multiple tablets
+// created during a single transaction (edge case).
+func TestTabletCloseMultipleTablets(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-multi-tablet-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	// Create warehouse
+	w, err := New(dirName)
+	assert.NoError(t, err)
+	tx, err := w.Transaction()
+	assert.NoError(t, err)
+
+	// Write some data to ensure tablet is created
+	err = tx.Put([]byte("key1"), []byte("value1"))
+	assert.NoError(t, err)
+
+	// Close transaction (closes write tablet)
+	err = tx.Close()
+	assert.NoError(t, err)
+	err = w.Close()
+	assert.NoError(t, err)
+
+	// Reopen and verify data can be read (tests read tablet close)
+	wr, err := OpenReadOnly(dirName)
+	assert.NoError(t, err)
+	txr, err := wr.Transaction()
+	assert.NoError(t, err)
+
+	buff := &bytes.Buffer{}
+	_, err = txr.Read([]byte("key1"), buff)
+	assert.NoError(t, err)
+	assert.Equal(t, "value1", buff.String())
+
+	err = txr.Close()
+	assert.NoError(t, err)
+	err = wr.Close()
+	assert.NoError(t, err)
+}
+
 // TestTransactionReadNotFound verifies that Read returns an error
 // when attempting to read a key that doesn't exist in the warehouse.
 func TestTransactionReadNotFound(t *testing.T) {
