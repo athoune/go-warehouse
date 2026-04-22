@@ -1,3 +1,3 @@
-#Warehouse
+# Warehouse
 
-Immutable storage for golang.
+Append only storage for golang.
