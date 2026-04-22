@@ -5,7 +5,12 @@ import (
 	"encoding/binary"
 )
 
-// id is a timestamp, return a base64 string, usable as a file name
+// dataName converts a tablet identifier (typically a timestamp) into a filesystem-safe string.
+// The id is encoded as little-endian uint64 bytes, then base64-encoded for use as a filename.
+// This ensures tablet files have valid, unique, and sortable names.
+// Parameters:
+//   - id: the tablet identifier (usually Unix milliseconds timestamp)
+// Returns: base64-encoded string suitable for use as a filename.
 func dataName(id int64) string {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(id))

@@ -16,6 +16,11 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// TestWarehouse validates the complete lifecycle of a Warehouse:
+// - Creating a new warehouse
+// - Writing data via transactions
+// - Closing and reopening in read-only mode
+// - Reading back the stored data
 func TestWarehouse(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-")
 	assert.NoError(t, err)
@@ -78,6 +83,8 @@ func TestWarehouse(t *testing.T) {
 	}
 }
 
+// TestSeekThenReadTo verifies the seek-and-read helper function
+// by creating a test file, seeking to an offset, and reading a specific range.
 func TestSeekThenReadTo(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "seek-read-to")
 	assert.NoError(t, err)
@@ -94,6 +101,8 @@ func TestSeekThenReadTo(t *testing.T) {
 	assert.Equal(t, []byte{2, 3, 4, 5}, w.Bytes())
 }
 
+// TestZstd validates the seekable zstd compression library integration.
+// It tests writing compressed data, seeking within it, and reading partial content.
 func TestZstd(t *testing.T) {
 
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-zstd-")
@@ -132,7 +141,9 @@ func TestZstd(t *testing.T) {
 	assert.Equal(t, []byte{2, 3}, buff)
 }
 
-/* Is there any lock drama in the stdlib ? */
+// TestFlock verifies file locking behavior using syscall.Flock.
+// Ensures exclusive locks can be acquired and released properly.
+// Note: Tests stdlib locking semantics, not warehouse-specific code.
 func TestFlock(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-flock-")
 	assert.NoError(t, err)
@@ -158,6 +169,8 @@ func TestFlock(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestBbolt validates basic BoltDB operations including opening,
+// closing, and reopening databases. Ensures the underlying storage works correctly.
 func TestBbolt(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-flock-")
 	assert.NoError(t, err)
