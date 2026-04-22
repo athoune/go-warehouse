@@ -185,3 +185,99 @@ func TestBbolt(t *testing.T) {
 	err = b2.Close()
 	assert.NoError(t, err)
 }
+
+// TestTransactionReadNotFound verifies that Read returns an error
+// when attempting to read a key that doesn't exist in the warehouse.
+func TestTransactionReadNotFound(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-read-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	// Create warehouse and add some data
+	w, err := New(dirName)
+	assert.NoError(t, err)
+	tx, err := w.Transaction()
+	assert.NoError(t, err)
+
+	err = tx.Put([]byte("existing-key"), []byte("some-value"))
+	assert.NoError(t, err)
+	err = tx.Close()
+	assert.NoError(t, err)
+	err = w.Close()
+	assert.NoError(t, err)
+
+	// Reopen and try to read non-existent key
+	wr, err := OpenReadOnly(dirName)
+	assert.NoError(t, err)
+	txr, err := wr.Transaction()
+	assert.NoError(t, err)
+
+	buff := &bytes.Buffer{}
+	n, err := txr.Read([]byte("non-existent-key"), buff)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown key")
+	assert.Equal(t, int64(0), n)
+	assert.Equal(t, 0, buff.Len())
+
+	err = txr.Close()
+	assert.NoError(t, err)
+	err = wr.Close()
+	assert.NoError(t, err)
+}
+
+// TestTransactionReadExisting verifies that Read correctly retrieves
+// data for existing keys, including edge cases like empty values.
+func TestTransactionReadExisting(t *testing.T) {
+	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-read-exist-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dirName)
+
+	w, err := New(dirName)
+	assert.NoError(t, err)
+	tx, err := w.Transaction()
+	assert.NoError(t, err)
+
+	// Test with various value sizes
+	fixtures := []struct {
+		key   string
+		value []byte
+	}{
+		{"small", []byte("x")},
+		{"empty", []byte{}},
+		{"medium", bytes.Repeat([]byte("abc"), 100)},
+		{"binary", []byte{0x00, 0x01, 0xFF, 0xFE}},
+	}
+
+	for _, f := range fixtures {
+		err = tx.Put([]byte(f.key), f.value)
+		assert.NoError(t, err)
+	}
+	err = tx.Close()
+	assert.NoError(t, err)
+	err = w.Close()
+	assert.NoError(t, err)
+
+	// Read back and verify
+	wr, err := OpenReadOnly(dirName)
+	assert.NoError(t, err)
+	txr, err := wr.Transaction()
+	assert.NoError(t, err)
+
+	for _, f := range fixtures {
+		buff := &bytes.Buffer{}
+		n, err := txr.Read([]byte(f.key), buff)
+		assert.NoError(t, err, "Failed to read key: %s", f.key)
+		assert.Equal(t, int64(len(f.value)), n, "Wrong size for key: %s", f.key)
+		// Handle nil vs empty slice comparison
+		if len(f.value) == 0 {
+			assert.Equal(t, 0, buff.Len(), "Wrong content for key: %s", f.key)
+		} else {
+			assert.Equal(t, f.value, buff.Bytes(), "Wrong content for key: %s", f.key)
+		}
+	}
+
+	err = txr.Close()
+	assert.NoError(t, err)
+	err = wr.Close()
+	assert.NoError(t, err)
+}

@@ -35,9 +35,10 @@ type Transaction struct {
 func (w *Warehouse) Transaction() (*Transaction, error) {
 	var err error
 	t := &Transaction{
-		name:    w.name,
-		decoder: w.decoder,
-		encoder: w.encoder,
+		name:     w.name,
+		decoder:  w.decoder,
+		encoder:  w.encoder,
+		readonly: w.encoder == nil, // Read-only if no encoder (read-only mode)
 	}
 	// Begin transaction: writable if encoder is present (read-write mode)
 	t.Tx, err = w.db.Begin(w.encoder != nil)
@@ -58,11 +59,18 @@ func (w *Warehouse) Transaction() (*Transaction, error) {
 	return t, nil
 }
 
-// Close commits the transaction and releases all resources.
-// For read-write transactions, this also closes the current write tablet.
-// Returns an error if committing or closing resources fails.
+// Close commits (for read-write) or rolls back (for read-only) the transaction
+// and releases all resources. For read-write transactions, this also closes
+// the current write tablet.
+// Returns an error if the operation fails.
 func (t *Transaction) Close() error {
-	err := t.Tx.Commit()
+	var err error
+	if t.readonly {
+		// Read-only transactions must be rolled back, not committed
+		err = t.Tx.Rollback()
+	} else {
+		err = t.Tx.Commit()
+	}
 	if err != nil {
 		return err
 	}
