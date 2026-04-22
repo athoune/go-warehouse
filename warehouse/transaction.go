@@ -131,8 +131,8 @@ func (t *Transaction) Put(key []byte, value []byte) error {
 // Useful for debugging and inspection. Format: "key => value#length"
 func (t *Transaction) Dump(w io.Writer) error {
 	return t.Bucket.ForEach(func(k []byte, v []byte) error {
-		fmt.Fprintf(w, "%v => %v#%v\n", string(k), v, len(v))
-		return nil
+		_, err := fmt.Fprintf(w, "%v => %v#%v\n", string(k), v, len(v))
+		return err
 	})
 }
 

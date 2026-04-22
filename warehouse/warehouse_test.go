@@ -25,7 +25,9 @@ func TestWarehouse(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-")
 	assert.NoError(t, err)
 	fmt.Println(dirName)
-	defer os.Remove(dirName)
+	defer func() {
+		_ = os.Remove(dirName)
+	}()
 
 	w, err := New(dirName)
 	assert.NoError(t, err)
@@ -71,7 +73,8 @@ func TestWarehouse(t *testing.T) {
 	wr, err := OpenReadOnly(dirName)
 	assert.NoError(t, err)
 	txr, err := wr.Transaction()
-	txr.Dump(os.Stdout)
+	assert.NoError(t, err)
+	err = txr.Dump(os.Stdout)
 	assert.NoError(t, err)
 	buff := &bytes.Buffer{}
 	for _, fixture := range fixtures {
@@ -88,7 +91,9 @@ func TestWarehouse(t *testing.T) {
 func TestSeekThenReadTo(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "seek-read-to")
 	assert.NoError(t, err)
-	defer os.Remove(dirName)
+	defer func() {
+		_ = os.Remove(dirName)
+	}()
 	testFile := path.Join(dirName, "test")
 	err = os.WriteFile(testFile, []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0640)
 	assert.NoError(t, err)
@@ -105,7 +110,9 @@ func TestSeekThenReadTo(t *testing.T) {
 func TestSeekThenReadToInvalidOffset(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "seek-read-invalid")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	testFile := path.Join(dirName, "test")
 	err = os.WriteFile(testFile, []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0640)
@@ -152,7 +159,9 @@ func TestSeekThenReadToInvalidOffset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r, err := os.Open(testFile)
 			assert.NoError(t, err)
-			defer r.Close()
+			defer func() {
+				_ = r.Close()
+			}()
 
 			w := bytes.NewBuffer(nil)
 			n, err := SeekThenReadTo(w, r, tt.offset, tt.size, tt.chunkSize)
@@ -172,7 +181,9 @@ func TestSeekThenReadToInvalidOffset(t *testing.T) {
 func TestSeekThenReadToChunkSizes(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "seek-read-chunks")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	// Create file with 100 bytes
 	data := bytes.Repeat([]byte("abcdefghij"), 10)
@@ -228,7 +239,9 @@ func TestSeekThenReadToChunkSizes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r, err := os.Open(testFile)
 			assert.NoError(t, err)
-			defer r.Close()
+			defer func() {
+				_ = r.Close()
+			}()
 
 			w := bytes.NewBuffer(nil)
 			n, err := SeekThenReadTo(w, r, tt.offset, tt.size, tt.chunkSize)
@@ -246,7 +259,9 @@ func TestZstd(t *testing.T) {
 
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-zstd-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 	fileName := path.Join(dirName, "test.ztsd")
 	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0640)
 	assert.NoError(t, err)
@@ -262,6 +277,7 @@ func TestZstd(t *testing.T) {
 	assert.NoError(t, err)
 
 	f, err = os.Open(fileName)
+	assert.NoError(t, err)
 	dec, err := zstd.NewReader(nil)
 	assert.NoError(t, err)
 	zstdReader, err := seekable.NewReader(f, dec)
@@ -286,7 +302,9 @@ func TestZstd(t *testing.T) {
 func TestFlock(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-flock-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 	fileName := path.Join(dirName, "lock.me")
 	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0640)
 	assert.NoError(t, err)
@@ -313,7 +331,9 @@ func TestFlock(t *testing.T) {
 func TestBbolt(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-flock-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 	b, err := bolt.Open(path.Join(dirName, "test.bolt"), 0640, nil)
 	assert.NoError(t, err)
 	err = b.Close()
@@ -330,7 +350,9 @@ func TestBbolt(t *testing.T) {
 func TestTabletCloseReadOnly(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-tablet-close-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	// Create warehouse and write some data
 	w, err := New(dirName)
@@ -364,7 +386,9 @@ func TestTabletCloseReadOnly(t *testing.T) {
 func TestTabletCloseWithReader(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-tablet-reader-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	// Create warehouse with data
 	w, err := New(dirName)
@@ -402,7 +426,9 @@ func TestTabletCloseWithReader(t *testing.T) {
 func TestTabletCloseMultipleTablets(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-multi-tablet-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	// Create warehouse
 	w, err := New(dirName)
@@ -442,7 +468,9 @@ func TestTabletCloseMultipleTablets(t *testing.T) {
 func TestTransactionReadNotFound(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-read-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	// Create warehouse and add some data
 	w, err := New(dirName)
@@ -481,7 +509,9 @@ func TestTransactionReadNotFound(t *testing.T) {
 func TestTransactionReadExisting(t *testing.T) {
 	dirName, err := os.MkdirTemp(os.TempDir(), "deb-deduplication-read-exist-")
 	assert.NoError(t, err)
-	defer os.RemoveAll(dirName)
+	defer func() {
+		_ = os.RemoveAll(dirName)
+	}()
 
 	w, err := New(dirName)
 	assert.NoError(t, err)
