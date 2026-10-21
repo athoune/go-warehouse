@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/SaveTheRbtz/zstd-seekable-format-go/pkg v0.8.0
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.7
 	github.com/stretchr/testify v1.11.1
 	go.etcd.io/bbolt v1.4.3
 )
